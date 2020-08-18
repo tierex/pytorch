@@ -148,7 +148,8 @@ IValue ScriptModuleDeserializer::readArchive(const std::string& archive_name) {
     if (auto enum_type = type.type_->cast<EnumType>()) {
       for (const auto& p : enum_type->enumNamesValues()) {
         if (p.second == input) {
-          auto enum_holder = c10::make_intrusive<at::ivalue::EnumHolder>(enum_type, p.first, p.second);
+          auto enum_holder = c10::make_intrusive<at::ivalue::EnumHolder>(
+              enum_type, p.first, p.second);
           return at::IValue(enum_holder);
         }
       }
@@ -163,12 +164,12 @@ IValue ScriptModuleDeserializer::readArchive(const std::string& archive_name) {
         // specialize the class before it is initialized.
         GraphOptimizerEnabledGuard guard(false);
         Function& set_state = class_type->getMethod("__setstate__");
-        // since we are in the middle of unpickling we might still have lists and
-        // dicts that do not have accurate tags (e.g. they report they are
-        // List[Any]). But we need to run __setstate__ which will check the input
-        // type and may access the tags. Since setstate has a known input type, we
-        // can correctly restore the tags now by apply the input type of set_state
-        // to the state object being passed.
+        // since we are in the middle of unpickling we might still have lists
+        // and dicts that do not have accurate tags (e.g. they report they are
+        // List[Any]). But we need to run __setstate__ which will check the
+        // input type and may access the tags. Since setstate has a known input
+        // type, we can correctly restore the tags now by apply the input type
+        // of set_state to the state object being passed.
         // TODO: Remove once [serialization type tags] is landed
         restoreAccurateTypeTags(
             input, set_state.getSchema().arguments().at(1).type());

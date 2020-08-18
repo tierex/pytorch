@@ -141,7 +141,8 @@ void Pickler::pushIValueImpl(const IValue& ivalue) {
 #endif
   } else if (ivalue.isEnum()) {
     auto enum_holder = ivalue.toEnumHolder();
-    const auto& qualified_class_name = enum_holder->type()->qualifiedClassName();
+    const auto& qualified_class_name =
+        enum_holder->type()->qualifiedClassName();
     pushGlobal(qualified_class_name.prefix(), qualified_class_name.name());
     pushIValue(enum_holder->value());
     push<PickleOpCode>(PickleOpCode::REDUCE);
