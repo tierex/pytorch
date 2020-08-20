@@ -268,6 +268,12 @@ void ProcessGroupNCCL::WorkNCCL::checkAndSetException() {
   exception_ = exception_ptr;
 }
 
+void ProcessGroupNCCL::WorkNCCL::setException(
+    std::exception_ptr exception_ptr) {
+  std::unique_lock<std::mutex> lock(mutex_);
+  exception_ = exception_ptr;
+}
+
 // Helper that checks if the NCCL kernels are completed on the GPUs
 bool ProcessGroupNCCL::WorkNCCL::finishedGPUExecution() {
   checkAndSetException();
@@ -496,9 +502,33 @@ void ProcessGroupNCCL::ncclCommWatchdogInternal() {
               // a communicator the application receives an exception and its
               // their responsibility to destroy the process group and recreate
               // it to recover from errors.
-              abortedCommIds.emplace(
-                  buildNcclUniqueIdStr(ncclComm->getNcclId()));
+              abortedCommIds.emplace(buildNcclUniqueIdStr(ncclComm->getNcclId()));
             }
+          }
+        }
+      }
+    }
+
+    {
+      std::unique_lock<std::mutex> lock(workVectorMutex_);
+      for (auto& work : workVector_) {
+        work->checkAndSetException();
+        // Aborting NCCL Communicators due to errors is already handled above.
+        if (work->exception()) {
+          continue;
+        }
+
+        // Check for Timeouts in the WorkNCCL Operations, and abort all
+        // communicators accordingly.
+        auto currentTimepoint = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(
+                currentTimepoint - work->workStartTime_) > work->opTimeout_) {
+          std::exception_ptr exception_ptr = std::make_exception_ptr(
+              std::runtime_error("NCCL Operation Timed Out"));
+          work->setException(exception_ptr);
+          for (const auto& ncclComm : work->ncclComms_) {
+            ncclComm->ncclCommAbort();
+            abortedCommIds.emplace(buildNcclUniqueIdStr(ncclComm->getNcclId()));
           }
         }
       }
